@@ -1,5 +1,5 @@
 import { BugAgent } from './BugAgent';
-import { stacktrace } from './examples/3-context-understanding/inputs';
+import { stacktrace } from './examples/context-understanding/inputs';
 
 async function main () {
   const agent = new BugAgent(stacktrace);
