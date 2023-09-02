@@ -90,7 +90,7 @@ export class BugAgent {
     let done: boolean = false;
 
     if (this.verbose) {
-      console.log('BugAgent: Starting to fix the bug "${this.error.message}"');
+      console.log(`BugAgent: Starting to fix the bug "${this.error.message}"`);
     }
 
     while (!done) {
@@ -146,7 +146,7 @@ ${functionCode}
           if (this.verbose) {
             console.log(`BugAgent: Fixing bug in function "${parameters.functionName}" in file "${parameters.filepath}"`)
           }
-          
+
           this.replaceFunctionCode(parameters.filepath, parameters.functionName, parameters.code);
         }
         break;
