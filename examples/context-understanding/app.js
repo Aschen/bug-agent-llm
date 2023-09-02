@@ -3,12 +3,14 @@ const express = require('express');
 const database = require('./database');
 const { verifyTask } = require('./verify');
 
+const { handleErrorWithAgent } = require('../../helpers');
+
 const app = express();
 app.use(express.json());
 
 app.get('/tasks', (req, res) => {
   const tasks = database.readTasksFromFile();
-  res.json(tasks);
+  res.json(tasks);  
 });
 
 function createTask (req, res) {
@@ -17,7 +19,16 @@ function createTask (req, res) {
   const savedTask = database.addTask(newTask);
   res.status(201).send(`Task ${savedTask.metadata.id} saved successfully`);
 }
-app.post('/tasks', createTask);
+
+app.post('/tasks', (req, res) => {
+  try {
+    createTask(req, res);
+  }  
+  catch (error) {
+    handleErrorWithAgent(error, { verbose: true });
+    throw error;
+  }
+});
 
 app.put('/tasks/:id', (req, res) => {
   const taskId = req.params.id;
