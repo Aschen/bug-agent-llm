@@ -30,6 +30,7 @@ export class BugAgent {
     To understand correctly the bug, you also need to follow the code of the functions called by the user functions.
     Check the require statements in the user functions to know which files you need to read.    
     Ignore the "handleErrorWithAgent" function call.
+    Do not read the code of functions you already have in User Functions.
     If you need to see the code of a function, you can use the following command:
     # Action:READ_CODE
     filepath: 
@@ -91,7 +92,7 @@ export class BugAgent {
     if (this.verbose) {
       console.log('BugAgent: Starting to fix the bug "${this.error.message}"');
     }
-    
+
     while (!done) {
       const formated = await this.promptTemplate.format({ 
         stacktrace: this.error.stack,
@@ -115,10 +116,6 @@ export class BugAgent {
         }
       }
     }
-
-    if (this.verbose) {
-      console.log('BugAgent: Bug fixed!')
-    }
   }
 
   executeAction (action, parameters) {
@@ -139,8 +136,17 @@ ${functionCode}
 
         break;
       case 'FIX_BUG':
+        if (this.verbose) {
+          console.log(`BugAgent: Bug report available in ${this.reportPath}`)
+        }
+    
         appendFileSync(this.reportPath, `# Explanation\n\n${parameters.explanation}\n\n# Fix \n\nFunction "${parameters.functionName}" in file "${parameters.filepath}" with code: \n${parameters.code}`);
+
         if (this.modify) {
+          if (this.verbose) {
+            console.log(`BugAgent: Fixing bug in function "${parameters.functionName}" in file "${parameters.filepath}"`)
+          }
+          
           this.replaceFunctionCode(parameters.filepath, parameters.functionName, parameters.code);
         }
         break;

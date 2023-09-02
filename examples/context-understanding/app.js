@@ -25,7 +25,7 @@ app.post('/tasks', (req, res) => {
     createTask(req, res);
   }  
   catch (error) {
-    handleErrorWithAgent(error, { verbose: true });
+    handleErrorWithAgent(error, { modify: true, verbose: true });
     throw error;
   }
 });
