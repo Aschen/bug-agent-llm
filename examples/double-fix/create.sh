@@ -1,5 +1,4 @@
 curl -X POST -H "Content-Type: application/json" -d '{
   "title": "Task Title",
-  "position": 1,
-  "metadata": "John Doe"
+  "position": 1
 }' http://localhost:3000/tasks

@@ -8,10 +8,6 @@ function verifyTask(task) {
     throw new Error('Invalid position');
   }
 
-  if (task.metadata.author.length > 120) {
-    throw new Error('Invalid author');
-  }
-
   return true;
 }
 

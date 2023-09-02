@@ -27,11 +27,9 @@ export class BugAgent {
     Stacktrace:
     {stacktrace}
         
-    To understand correctly the bug, you also need to follow the code of the functions called by the user functions.
+    To understand correctly the bug, you need to read the code of all the function called from the entrypoint.
     Check the require statements in the user functions to know which files you need to read.    
-    Ignore the "handleErrorWithAgent" function call.
-    Do not read the code of functions you already have in User Functions.
-    If you need to see the code of a function, you can use the following command:
+    To read the code of a function, you can use the following command:
     # Action:READ_CODE
     filepath: 
     functionName:
@@ -40,22 +38,26 @@ export class BugAgent {
     User functions:
     {userFunctions}
 
-    If you already read all the function or reach the entry point of the program which is the request received from the client in the express handler then you can analyze the bug.
+    Once you have read the code of all the functions, you can understand the bug with the entire context.
     
     You will need to give a short explanation of the bug.
-    You will also provide a fix to replace the faulty code. 
+    You will also provide a fix for the bug. 
     Try to fix the bug as soon as it occur in the function call flow. 
     You don't have the full code of the file, so you will need to make assumptions.
-    
+    You may have to modify functions in different files to fix the bug.
+
     You will format your answer like this:
-        
-    # Action:FIX_BUG
+
+    # Action:EXPLANATION
     explanation: // give a short explanation of the bug here
+    # end
+        
+    # Action:FIX_FUNCTIONS
     filepath: // give the path of the file where the fix is
     functionName: // give the name of the function where the fix is
     code:
     \`\`\`js
-    // give the code of the fixed function here	
+    // give the entire code of the fixed function here	
     \`\`\`
     # end
     `,
@@ -96,7 +98,7 @@ export class BugAgent {
     while (!done) {
       const formated = await this.promptTemplate.format({ 
         stacktrace: this.error.stack,
-        userFunctions: this.userFunctions.join('\n'),
+        userFunctions: this.userFunctions.join('\n----------\n'),
       });
       
       const textResponse = await this.model.call(formated);
@@ -111,10 +113,14 @@ export class BugAgent {
         const { action, parameters } = section;
         await this.executeAction(action, parameters);
 
-        if (action === 'FIX_BUG') {
+        if (action === 'FIX_FUNCTIONS') {
           done = true;
         }
       }
+    }
+
+    if (this.verbose) {
+      console.log(`BugAgent: Bug report available in ${this.reportPath}`)
     }
   }
 
@@ -126,8 +132,9 @@ export class BugAgent {
         }
 
         const functionCode = this.readFunctionCode(parameters.filepath, parameters.functionName);
-        const requireStatements = this.extractRequires(parameters.filepath);
+        const requireStatements = this.extractRequiresStatements(parameters.filepath);
         this.userFunctions.push(`file: ${parameters.filepath}
+functionName: ${parameters.functionName}
 \`\`\`js
 ${requireStatements.join('\n')}
 
@@ -135,12 +142,14 @@ ${functionCode}
 \`\`\``);
 
         break;
-      case 'FIX_BUG':
+      case 'EXPLANATION':
         if (this.verbose) {
-          console.log(`BugAgent: Bug report available in ${this.reportPath}`)
+          console.log(`BugAgent: Explanation of the bug: ${parameters.explanation}`)
         }
-    
-        appendFileSync(this.reportPath, `# Explanation\n\n${parameters.explanation}\n\n# Fix \n\nFunction "${parameters.functionName}" in file "${parameters.filepath}" with code: \n${parameters.code}`);
+        appendFileSync(this.reportPath, `# Explanation\n\n${parameters.explanation}\n\n`);
+
+      case 'FIX_FUNCTIONS':    
+        appendFileSync(this.reportPath, `## Fix Function "${parameters.functionName}" in file "${parameters.filepath}" with code: \n${parameters.code}\n\n`);
 
         if (this.modify) {
           if (this.verbose) {
@@ -217,44 +226,34 @@ ${functionCode}
     }
   }
 
-  extractRequires(filePath) {
-    try {
-      // Read the content of the source file
-      const sourceCode = readFileSync(filePath, 'utf-8');
-      const fileDir = path.dirname(filePath);
+  extractRequiresStatements(filePath) {
+    const jsCode = readFileSync(filePath, 'utf-8');
+    const ast = acorn.parse(jsCode, { ecmaVersion: 'latest' });
+    const localRequireStatements: string[] = [];
   
-      // Parse the source code into an AST using Acorn
-      const ast = acorn.parse(sourceCode, { ecmaVersion: 'latest' });
-  
-      const requireStatements: string[] = [];
-  
-      // Use Acorn's AST walking utility to find 'require' calls
-      walk.simple(ast, {
-        CallExpression(node: any) {
+    walk.simple(ast, {
+      VariableDeclaration(declarationNode: any) {
+        const { declarations } = declarationNode;
+        for (const declaration of declarations) {
           if (
-            node.callee.type === 'Identifier' &&
-            node.callee.name === 'require' &&
-            node.arguments.length === 1 &&
-            node.arguments[0].type === 'Literal'
+            declaration.id.type === 'Identifier' &&
+            declaration.init &&
+            declaration.init.type === 'CallExpression' &&
+            declaration.init.callee.type === 'Identifier' &&
+            declaration.init.callee.name === 'require' &&
+            declaration.init.arguments.length === 1 &&
+            declaration.init.arguments[0].type === 'Literal' &&
+            declaration.init.arguments[0].value.startsWith('./')
           ) {
-            // Extract the module name from the 'require' statement
-            const moduleName = node.arguments[0].value;
-  
-            // Resolve the relative path to the CWD
-            const absolutePath = path.resolve(fileDir, moduleName);
-  
-            // Convert the absolute path back to a path relative to CWD
-            const relativePath = path.relative(process.cwd(), absolutePath);
-  
-            requireStatements.push(`require('${relativePath}')`);
+            const moduleName = declaration.init.arguments[0].value;
+            const resolvedPath = path.resolve(moduleName).replace(process.cwd(), '.');
+            localRequireStatements.push(`${declaration.id.name} = require('${resolvedPath}')`);
           }
-        },
-      });
+        }
+      },
+    });
   
-      return requireStatements;
-    } catch (error) {
-      throw new Error(`Error reading or parsing the source file: ${error.message}`);
-    }
+    return localRequireStatements;
   }
 
   replaceFunctionCode(filePath, functionName, newFunctionCode) {

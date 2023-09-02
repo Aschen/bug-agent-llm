@@ -3,19 +3,31 @@ const express = require('express');
 const database = require('./database');
 const { verifyTask } = require('./verify');
 
+const { handleErrorWithAgent } = require('../../helpers');
+
 const app = express();
 app.use(express.json());
 
 app.get('/tasks', (req, res) => {
   const tasks = database.readTasksFromFile();
-  res.json(tasks);
+  res.json(tasks);  
 });
 
-app.post('/tasks', (req, res) => {
+function createTask (req, res) {
   const newTask = req.body;
   verifyTask(newTask);
   database.addTask(newTask);
-  res.status(201).send('Task saved successfully');
+  res.status(201).send(`Task ${newTask.metadata.id} saved successfully`);
+}
+
+app.post('/tasks', (req, res) => {
+  try {
+    createTask(req, res);
+  }  
+  catch (error) {
+    handleErrorWithAgent(error, { modify: false, verbose: true });
+    throw error;
+  }
 });
 
 app.put('/tasks/:id', (req, res) => {

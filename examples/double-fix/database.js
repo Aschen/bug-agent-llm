@@ -1,5 +1,9 @@
 const fs = require('fs');
 
+function generateId() {
+  return Math.floor(Math.random() * 1000);
+}
+
 function readTasksFromFile() {
   let tasksData = '[]';
   try {
@@ -21,7 +25,7 @@ function writeTasksToFile(tasks) {
 
 function addTask(newTask) {
   const tasks = readTasksFromFile();
-  tasks.push(newTask);
+  tasks.push({ ...newTask, metadata: { id: generateId() } });
   writeTasksToFile(tasks);
 }
 
