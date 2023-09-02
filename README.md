@@ -22,6 +22,12 @@ app.post('/tasks', (req, res) => {
 });
 ```
 
+### Try yourself
+
+Run one of the example app: `npx ts-node ./examples/context-understanding/app.js`
+
+Send a request: `bash ./examples/context-understanding/create.sh`
+
 ## Example 1: error with context in 2 different files
 
 This error is caused by accessing a property that does not exists on a object.  
