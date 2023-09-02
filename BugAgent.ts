@@ -22,12 +22,14 @@ export class BugAgent {
   private promptTemplate = new PromptTemplate({
     template: `You are a developer trying to understand a bug.
 
-    You will be given a stacktrace to understand the error.
+    You will be given a stacktrace to understand the error. 
+    Before trying to understand the bug you need to read the code of all the user functions called.
     
     Stacktrace:
     {stacktrace}
         
-    To understand correctly the bug, you need to read the code of all the function called from the entrypoint.
+    You need to read all the user function code that are used from the first function referenced by the stacktrace.
+    For each user function, note the name of every function that is called and read the code of these functions. 
     Check the require statements in the user functions to know which files you need to read.    
     To read the code of a function, you can use the following command:
     # Action:READ_CODE
@@ -35,10 +37,11 @@ export class BugAgent {
     functionName:
     # end
 
-    User functions:
+    User Functions:
     {userFunctions}
 
-    Once you have read the code of all the functions, you can understand the bug with the entire context.
+    Once you have read the code of all the functions referenced in every User Function, 
+    you can understand the bug with the entire context.
     
     You will need to give a short explanation of the bug.
     You will also provide a fix for the bug. 
@@ -57,7 +60,7 @@ export class BugAgent {
     functionName: // give the name of the function where the fix is
     code:
     \`\`\`js
-    // give the entire code of the fixed function here	
+    // give only the entire code of the fixed function here. do not add require statements
     \`\`\`
     # end
     `,
@@ -109,8 +112,7 @@ export class BugAgent {
       
       const sections = this.parseResponse(textResponse);
 
-      for (const section of sections) {
-        const { action, parameters } = section;
+      for (const { action, parameters } of sections) {
         await this.executeAction(action, parameters);
 
         if (action === 'FIX_FUNCTIONS') {
@@ -147,21 +149,27 @@ ${functionCode}
           console.log(`BugAgent: Explanation of the bug: ${parameters.explanation}`)
         }
         appendFileSync(this.reportPath, `# Explanation\n\n${parameters.explanation}\n\n`);
+        break;
 
       case 'FIX_FUNCTIONS':    
-        appendFileSync(this.reportPath, `## Fix Function "${parameters.functionName}" in file "${parameters.filepath}" with code: \n${parameters.code}\n\n`);
+        const cleanCode = this.cleanFunctionCode(parameters.code);
+        appendFileSync(this.reportPath, `## Fix Function "${parameters.functionName}" in file "${parameters.filepath}" with code: \n${cleanCode}\n\n`);
 
         if (this.modify) {
           if (this.verbose) {
             console.log(`BugAgent: Fixing bug in function "${parameters.functionName}" in file "${parameters.filepath}"`)
           }
 
-          this.replaceFunctionCode(parameters.filepath, parameters.functionName, parameters.code);
+          this.replaceFunctionCode(parameters.filepath, parameters.functionName, cleanCode);
         }
         break;
       default:
         throw new Error(`Unknown action: ${action}`);
     }
+  }
+
+  cleanFunctionCode (functionCode) {
+    return functionCode.replace(/.*require\(.+\);?/g, '')
   }
 
   parseResponse (textResponse) {
@@ -199,88 +207,58 @@ ${functionCode}
   }
 
   readFunctionCode(filePath, functionName) {
-    try {
-      // Read the content of the source file
-      const sourceCode = readFileSync(filePath, 'utf-8');
+    const sourceCode = readFileSync(filePath, 'utf-8');
   
-      const ast = acorn.parse(sourceCode, { ecmaVersion: 'latest' });
-  
-      let targetFunctionCode: string|null = null;
-  
-      walk.simple(ast, {
-        FunctionDeclaration(node: any) {
-          if (node.id.name === functionName) {
-            // Extract the source code of the target function
-            targetFunctionCode = sourceCode.substring(node.start, node.end);
-          }
-        },
-      });
-  
-      if (targetFunctionCode) {
-        return targetFunctionCode;
-      } else {
-        throw new Error(`Function "${functionName}" not found in the source code.`);
-      }
-    } catch (error) {
-      throw new Error(`Error reading or parsing the source file: ${error.message}`);
-    }
-  }
+    const ast = acorn.parse(sourceCode, { ecmaVersion: 'latest' });
 
-  extractRequiresStatements(filePath) {
-    const jsCode = readFileSync(filePath, 'utf-8');
-    const ast = acorn.parse(jsCode, { ecmaVersion: 'latest' });
-    const localRequireStatements: string[] = [];
-  
+    let targetFunctionCode: string|null = null;
+
     walk.simple(ast, {
-      VariableDeclaration(declarationNode: any) {
-        const { declarations } = declarationNode;
-        for (const declaration of declarations) {
-          if (
-            declaration.id.type === 'Identifier' &&
-            declaration.init &&
-            declaration.init.type === 'CallExpression' &&
-            declaration.init.callee.type === 'Identifier' &&
-            declaration.init.callee.name === 'require' &&
-            declaration.init.arguments.length === 1 &&
-            declaration.init.arguments[0].type === 'Literal' &&
-            declaration.init.arguments[0].value.startsWith('./')
-          ) {
-            const moduleName = declaration.init.arguments[0].value;
-            const resolvedPath = path.resolve(moduleName).replace(process.cwd(), '.');
-            localRequireStatements.push(`${declaration.id.name} = require('${resolvedPath}')`);
-          }
+      FunctionDeclaration(node: any) {
+        if (node.id.name === functionName) {
+          // Extract the source code of the target function
+          targetFunctionCode = sourceCode.substring(node.start, node.end);
         }
       },
     });
-  
+
+    if (targetFunctionCode) {
+      return targetFunctionCode;
+    } else {
+      throw new Error(`Function "${functionName}" not found in the source code.`);
+    }
+}
+
+  extractRequiresStatements(filePath) {
+    const jsCode = readFileSync(filePath, 'utf-8');
+
+    const requirePattern = /const\s+([\w\s,{}]+)\s+=\s+require\(['"]\.(\/[^'"]+)['"]\);?/g;
+
+    const localRequireStatements: string[] = [];
+    let match;
+    
+    while ((match = requirePattern.exec(jsCode)) !== null) {
+      localRequireStatements.push(match[0]);
+    }
     return localRequireStatements;
   }
 
   replaceFunctionCode(filePath, functionName, newFunctionCode) {
-    try {
-      // Read the content of the source file
-      const sourceCode = readFileSync(filePath, 'utf-8');
-  
-      // Parse the source code into an AST using Acorn
-      const ast = acorn.parse(sourceCode, { ecmaVersion: 'latest' });
-  
-      // Find and replace the code of the specified function
-      walk.simple(ast, {
-        FunctionDeclaration(node: any) {
-          if (node.id.name === functionName) {
-            let newNode: any = acorn.parse(newFunctionCode, { ecmaVersion: 'latest' });
-            node.body = newNode.body[0].body;
-          }
-        },
-      });
-  
-      // Generate updated source code
-      const updatedCode = escodegen.generate(ast);
-  
-      // Write the updated code back to the file
-      writeFileSync(filePath, updatedCode, 'utf-8');
-    } catch (error) {
-      throw new Error(`Error reading or updating the source file: ${error.message}`);
-    }
+    const sourceCode = readFileSync(filePath, 'utf-8');
+
+    const ast = acorn.parse(sourceCode, { ecmaVersion: 'latest' });
+
+    walk.simple(ast, {
+      FunctionDeclaration(node: any) {
+        if (node.id.name === functionName) {
+          let newNode: any = acorn.parse(newFunctionCode, { ecmaVersion: 'latest' });
+          node.body = newNode.body[0].body;
+        }
+      },
+    });
+
+    const updatedCode = escodegen.generate(ast);
+
+    writeFileSync(filePath, updatedCode, 'utf-8');
   }
 }
