@@ -35,7 +35,7 @@ The property is accessed in the `createTask` function of `app.js` but is set in 
 
 The agent successfully suggest to return an updated task including the new property.
 
-Generated report: [examples/context-understanding/cannot-read-properties-of-undefined-(reading-'id').md](examples/context-understanding/cannot-read-properties-of-undefined-(reading-'id').md)
+See the PR https://github.com/Aschen/bug-agent-llm/pull/1
 
 (See [example app directory](examples/context-understanding))
 
@@ -60,7 +60,7 @@ function addTask(newTask) {
 
 The error is more or less the same but this time we need to update the 2 functions in order to solve it.
 
-Generated report: [examples/fix-two-files/cannot-read-properties-of-undefined-(reading-'id').md](examples/fix-two-files/cannot-read-properties-of-undefined-(reading-'id').md)
+See the PR https://github.com/Aschen/bug-agent-llm/pull/2
 
 (See [example app directory](examples/fix-two-files))
 
