@@ -25,8 +25,10 @@ function writeTasksToFile(tasks) {
 
 function addTask(newTask) {
   const tasks = readTasksFromFile();
-  tasks.push({ ...newTask, metadata: { id: generateId() } });
+  const taskWithId = { ...newTask, metadata: { id: generateId() } };
+  tasks.push(taskWithId);
   writeTasksToFile(tasks);
+  return taskWithId;
 }
 
 function updateTask(taskId, updatedTask) {
