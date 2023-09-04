@@ -1,6 +1,6 @@
 # BugAgent
 
-This agent use Generative AI to determine the cause of an error and suggest a fix.
+This agent use Generative AI to determine the cause of an error, suggest a fix and even modify the faulty code.
 
 The agent will start from the stacktrace and then read the code of every function involved to get more context. Then it will explain the error and suggest a fix in a report.
 
