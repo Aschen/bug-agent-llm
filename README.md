@@ -6,6 +6,8 @@ The agent will start from the stacktrace and then read the code of every functio
 
 The fix can also be automatically made in-place.
 
+The pulls requests of this repository are example of fix made by the agent: https://github.com/Aschen/bug-agent-llm/pulls
+
 ## Usage
 
 Import the agent and catch an error with the `handleErrorWithAgent` function.
