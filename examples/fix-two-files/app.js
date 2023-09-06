@@ -16,8 +16,8 @@ app.get('/tasks', (req, res) => {
 function createTask (req, res) {
   const newTask = req.body;
   verifyTask(newTask);
-  database.addTask(newTask);
-  res.status(201).send(`Task ${newTask.metadata.id} saved successfully`);
+  const savedTask = database.addTask(newTask);
+  res.status(201).send(`Task ${savedTask.metadata.id} saved successfully`);
 }
 
 app.post('/tasks', (req, res) => {
