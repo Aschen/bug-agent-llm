@@ -21,10 +21,11 @@ function writeTasksToFile(tasks) {
 }
 function addTask(newTask) {
     const tasks = readTasksFromFile();
-    tasks.push({ ...newTask, metadata: { id: generateId() } });
+    const taskWithMetadata = { ...newTask, metadata: { id: generateId() } };
+    tasks.push(taskWithMetadata);
     writeTasksToFile(tasks);
-    return newTask;
-}
+    return taskWithMetadata;
+  }
 function updateTask(taskId, updatedTask) {
     const tasks = readTasksFromFile();
     const taskIndex = tasks.findIndex(task => task.id === taskId);
